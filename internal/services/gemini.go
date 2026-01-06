@@ -432,11 +432,9 @@ func cleanJSONResponse(text string) string {
 
 // Helper: decode base64 image and handle data URI prefix
 func decodeBase64Image(imageBase64 string) ([]byte, error) {
-	// Remove data URI prefix if present
-	originalLen := len(imageBase64)
-	if i := strings.Index(imageBase64, ","); i != -1 {
-		imageBase64 = imageBase64[i+1:]
-		fmt.Printf("[DECODE] Stripped data URI prefix. Size: %d -> %d\n", originalLen, len(imageBase64))
+	// Remove data URI prefix if present (e.g., "data:image/jpeg;base64,")
+	if _, after, found := strings.Cut(imageBase64, ","); found {
+		imageBase64 = after
 	}
 
 	data, err := base64.StdEncoding.DecodeString(imageBase64)
