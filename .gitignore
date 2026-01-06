@@ -1,0 +1,27 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Environment variables
+.env
+
+# MacOS files
+.DS_Store
+
+# IDE files
+.idea/
+.vscode/
+
+# Project specific binaries
+server
+main
+cotton-cloud-backend
