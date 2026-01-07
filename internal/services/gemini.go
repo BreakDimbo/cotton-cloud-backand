@@ -76,16 +76,24 @@ type ClothingAnalysis struct {
 	Season      []string `json:"season"`
 }
 
-func (s *GeminiService) AnalyzeClothing(ctx context.Context, imageBase64, mimeType string) (*ClothingAnalysis, error) {
+func (s *GeminiService) AnalyzeClothing(ctx context.Context, imageBase64, mimeType, lang string) (*ClothingAnalysis, error) {
 	// Clean base64 and decode
 	imageData, err := decodeBase64Image(imageBase64)
 	if err != nil {
 		return nil, err
 	}
 
+	// Language instruction
+	langInstruction := "Generate the 'description' and 'tags' in English."
+	if strings.HasPrefix(strings.ToLower(lang), "zh") {
+		langInstruction = "Generate the 'description' and 'tags' in Simplified Chinese."
+	}
+
 	// Cotton Cloud branded prompt with exact taxonomy
 	prompt := fmt.Sprintf(`Analyze this clothing item for the high-end digital wardrobe app "Cotton Cloud".
-Select values ONLY from these lists:
+%s
+
+Select values ONLY from these lists for the other fields:
 Categories: %s
 Colors: %s
 Materials: %s
@@ -102,6 +110,7 @@ Return a JSON object with:
   "style": ["1-3 styles from the list"],
   "season": ["1-3 seasons from the list"]
 }`,
+		langInstruction,
 		strings.Join(CategoryOptions, ", "),
 		strings.Join(ColorOptions, ", "),
 		strings.Join(MaterialOptions, ", "),
@@ -139,13 +148,21 @@ Return a JSON object with:
 }
 
 // RefineClothingAnalysis refines analysis based on user feedback
-func (s *GeminiService) RefineClothingAnalysis(ctx context.Context, imageBase64, userFeedback, mimeType string) (*ClothingAnalysis, error) {
+func (s *GeminiService) RefineClothingAnalysis(ctx context.Context, imageBase64, userFeedback, mimeType, lang string) (*ClothingAnalysis, error) {
 	imageData, err := decodeBase64Image(imageBase64)
 	if err != nil {
 		return nil, err
 	}
 
+	// Language instruction
+	langInstruction := "Generate the 'description' and 'tags' in English."
+	if strings.HasPrefix(strings.ToLower(lang), "zh") {
+		langInstruction = "Generate the 'description' and 'tags' in Simplified Chinese."
+	}
+
 	prompt := fmt.Sprintf(`Refine the analysis of this clothing item based on user feedback: "%s"
+%s
+
 Keep all values within the Cotton Cloud taxonomy:
 Categories: %s
 Colors: %s
@@ -155,6 +172,7 @@ Seasons: %s
 
 Return updated JSON with category, color, material, description, tags, style, season.`,
 		userFeedback,
+		langInstruction,
 		strings.Join(CategoryOptions, ", "),
 		strings.Join(ColorOptions, ", "),
 		strings.Join(MaterialOptions, ", "),
@@ -168,7 +186,7 @@ Return updated JSON with category, color, material, description, tags, style, se
 	)
 	if err != nil {
 		// Fallback to standard analysis
-		return s.AnalyzeClothing(ctx, imageBase64, mimeType)
+		return s.AnalyzeClothing(ctx, imageBase64, mimeType, lang)
 	}
 
 	text := extractTextFromParts(resp.Candidates[0].Content.Parts)
@@ -176,7 +194,7 @@ Return updated JSON with category, color, material, description, tags, style, se
 
 	var analysis ClothingAnalysis
 	if err := json.Unmarshal([]byte(text), &analysis); err != nil {
-		return s.AnalyzeClothing(ctx, imageBase64, mimeType)
+		return s.AnalyzeClothing(ctx, imageBase64, mimeType, lang)
 	}
 
 	return &analysis, nil

@@ -111,7 +111,8 @@ func (h *AIHandler) AnalyzeClothing(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
 
-	analysis, err := h.gemini.AnalyzeClothing(ctx, req.ImageBase64, req.MimeType)
+	lang := c.GetHeader("Accept-Language")
+	analysis, err := h.gemini.AnalyzeClothing(ctx, req.ImageBase64, req.MimeType, lang)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -144,7 +145,8 @@ func (h *AIHandler) RefineAnalysis(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
 
-	analysis, err := h.gemini.RefineClothingAnalysis(ctx, req.ImageBase64, req.UserFeedback, req.MimeType)
+	lang := c.GetHeader("Accept-Language")
+	analysis, err := h.gemini.RefineClothingAnalysis(ctx, req.ImageBase64, req.UserFeedback, req.MimeType, lang)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
