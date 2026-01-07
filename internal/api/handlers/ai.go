@@ -48,10 +48,15 @@ type GenerateCutoutRequest struct {
 
 // RefineCutoutRequest is the request body for cutout refinement
 type RefineCutoutRequest struct {
-	OriginalImageBase64 string `json:"originalImageBase64" binding:"required"`
+	CacheID             string `json:"cacheId" binding:"required"` // Server-side cached original image ID
 	CurrentCutoutBase64 string `json:"currentCutoutBase64" binding:"required"`
 	UserFeedback        string `json:"userFeedback" binding:"required"`
 	MimeType            string `json:"mimeType" binding:"required"`
+}
+
+// ClearCacheRequest is the request body for clearing cached images
+type ClearCacheRequest struct {
+	CacheID string `json:"cacheId" binding:"required"`
 }
 
 // GenerateAvatarRequest is the request body for avatar generation
@@ -157,10 +162,16 @@ func (h *AIHandler) GenerateCutout(c *gin.Context) {
 	}
 	fmt.Printf("[HANDLER] GenerateCutout MIME: %s\n", req.MimeType)
 
+	// Cache the original image for future refine operations
+	cache := services.GetImageCache()
+	cacheID := cache.Store(req.ImageBase64, req.MimeType)
+	fmt.Printf("[HANDLER] Cached original image with ID: %s\n", cacheID)
+
 	if h.gemini == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"message":  "Cutout generation - Gemini not configured",
 			"imageUrl": "https://picsum.photos/400/600",
+			"cacheId":  cacheID,
 		})
 		return
 	}
@@ -170,12 +181,15 @@ func (h *AIHandler) GenerateCutout(c *gin.Context) {
 
 	imageBase64, err := h.gemini.GenerateCutout(ctx, req.ImageBase64, req.MimeType)
 	if err != nil {
+		// Clean up cache on error
+		cache.Delete(cacheID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"imageBase64": imageBase64,
+		"cacheId":     cacheID,
 		"message":     "Cutout generated successfully",
 	})
 }
@@ -187,12 +201,21 @@ func (h *AIHandler) RefineCutout(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	fmt.Printf("[HANDLER] RefineCutout feedback: %s\n", req.UserFeedback)
+	fmt.Printf("[HANDLER] RefineCutout cacheId: %s, feedback: %s\n", req.CacheID, req.UserFeedback)
+
+	// Retrieve original image from cache
+	cache := services.GetImageCache()
+	entry, exists := cache.Get(req.CacheID)
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Cache expired or not found. Please regenerate from original."})
+		return
+	}
 
 	if h.gemini == nil {
 		c.JSON(http.StatusOK, gin.H{
 			"message":     "Cutout refinement - Gemini not configured",
-			"imageBase64": req.CurrentCutoutBase64, // Return the original as fallback
+			"imageBase64": req.CurrentCutoutBase64, // Return the current as fallback
+			"cacheId":     req.CacheID,
 		})
 		return
 	}
@@ -200,7 +223,7 @@ func (h *AIHandler) RefineCutout(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 	defer cancel()
 
-	imageBase64, err := h.gemini.RefineCutout(ctx, req.OriginalImageBase64, req.CurrentCutoutBase64, req.UserFeedback, req.MimeType)
+	imageBase64, err := h.gemini.RefineCutout(ctx, entry.OriginalImageBase64, req.CurrentCutoutBase64, req.UserFeedback, req.MimeType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -208,7 +231,26 @@ func (h *AIHandler) RefineCutout(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"imageBase64": imageBase64,
+		"cacheId":     req.CacheID, // Return same cacheId for subsequent refines
 		"message":     "Cutout refined successfully",
+	})
+}
+
+// ClearImageCache removes a cached image (called when user completes the flow)
+func (h *AIHandler) ClearImageCache(c *gin.Context) {
+	var req ClearCacheRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	fmt.Printf("[HANDLER] ClearImageCache cacheId: %s\n", req.CacheID)
+
+	cache := services.GetImageCache()
+	deleted := cache.Delete(req.CacheID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": deleted,
+		"message": "Cache cleared",
 	})
 }
 
