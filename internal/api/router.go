@@ -78,6 +78,7 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 				aiHandler := handlers.NewAIHandler()
 				ai.POST("/analyze", aiHandler.AnalyzeClothing)
 				ai.POST("/cutout", aiHandler.GenerateCutout)
+				ai.POST("/refine-cutout", aiHandler.RefineCutout)
 				ai.POST("/avatar", aiHandler.GenerateAvatar)
 				ai.POST("/collage", aiHandler.GenerateCollage)
 				ai.POST("/tryon", aiHandler.VirtualTryOn)

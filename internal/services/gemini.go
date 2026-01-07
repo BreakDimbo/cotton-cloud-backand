@@ -253,6 +253,50 @@ Output only the clothing item on pure white background.`
 	return extractImageFromResponse(resp)
 }
 
+// RefineCutout regenerates a cutout based on user feedback
+func (s *GeminiService) RefineCutout(ctx context.Context, originalImageBase64, currentCutoutBase64, userFeedback, mimeType string) (string, error) {
+	originalData, err := decodeBase64Image(originalImageBase64)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode original image: %w", err)
+	}
+
+	currentData, err := decodeBase64Image(currentCutoutBase64)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode current cutout: %w", err)
+	}
+
+	// Sanitize MIME type
+	mimeType = strings.TrimPrefix(mimeType, "image/")
+
+	// Refinement prompt incorporating user feedback
+	prompt := fmt.Sprintf(`You previously generated a clothing cutout (second image) from the original photo (first image).
+The user has provided feedback to improve the result: "%s"
+
+Please generate an improved cutout addressing the user's concerns while maintaining:
+- Pure white background (#FFFFFF)
+- Professional e-commerce product photography style
+- Preserved exact colors and textures
+- Centered composition with balanced layout
+- Aspect ratio 3:4
+
+User feedback to address: %s
+
+Output only the improved clothing item on pure white background.`, userFeedback, userFeedback)
+
+	fmt.Printf("[AI] Refining cutout based on feedback: %s (MIME: %s)\n", userFeedback, mimeType)
+	resp, err := s.imageModel.GenerateContent(ctx,
+		genai.ImageData(mimeType, originalData),
+		genai.ImageData(mimeType, currentData),
+		genai.Text(prompt),
+	)
+	if err != nil {
+		fmt.Printf("[AI ERROR] RefineCutout failed: %v\n", err)
+		return "", fmt.Errorf("failed to refine cutout: %w", err)
+	}
+
+	return extractImageFromResponse(resp)
+}
+
 // AvatarMetrics contains body measurement data
 type AvatarMetrics struct {
 	Gender   string `json:"gender"`

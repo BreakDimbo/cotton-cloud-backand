@@ -46,6 +46,14 @@ type GenerateCutoutRequest struct {
 	MimeType    string `json:"mimeType" binding:"required"`
 }
 
+// RefineCutoutRequest is the request body for cutout refinement
+type RefineCutoutRequest struct {
+	OriginalImageBase64 string `json:"originalImageBase64" binding:"required"`
+	CurrentCutoutBase64 string `json:"currentCutoutBase64" binding:"required"`
+	UserFeedback        string `json:"userFeedback" binding:"required"`
+	MimeType            string `json:"mimeType" binding:"required"`
+}
+
 // GenerateAvatarRequest is the request body for avatar generation
 type GenerateAvatarRequest struct {
 	FaceImageBase64 string `json:"faceImageBase64" binding:"required"`
@@ -169,6 +177,38 @@ func (h *AIHandler) GenerateCutout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"imageBase64": imageBase64,
 		"message":     "Cutout generated successfully",
+	})
+}
+
+// RefineCutout refines a clothing cutout based on user feedback
+func (h *AIHandler) RefineCutout(c *gin.Context) {
+	var req RefineCutoutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	fmt.Printf("[HANDLER] RefineCutout feedback: %s\n", req.UserFeedback)
+
+	if h.gemini == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"message":     "Cutout refinement - Gemini not configured",
+			"imageBase64": req.CurrentCutoutBase64, // Return the original as fallback
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	defer cancel()
+
+	imageBase64, err := h.gemini.RefineCutout(ctx, req.OriginalImageBase64, req.CurrentCutoutBase64, req.UserFeedback, req.MimeType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"imageBase64": imageBase64,
+		"message":     "Cutout refined successfully",
 	})
 }
 
