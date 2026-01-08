@@ -236,24 +236,40 @@ Return JSON with bestMatchId (or empty string if no match) and candidateIds arra
 	return &match, nil
 }
 
-// GenerateCutout generates a perfect product cutout
+// GenerateCutout generates a professional product cutout using optimized prompts
 func (s *GeminiService) GenerateCutout(ctx context.Context, imageBase64, mimeType string) (string, error) {
 	imageData, err := decodeBase64Image(imageBase64)
 	if err != nil {
 		return "", err
 	}
 
-	// Cotton Cloud optimized cutout prompt
-	prompt := `Isolate this clothing item on a pure white background (#FFFFFF).
-Requirements:
-- Remove all background, mannequin, person, or hanger
-- Retouch fabric to appear smooth, freshly ironed
-- Professional e-commerce product photography style
-- Preserve exact colors and textures
-- Center the item with balanced composition
-- Aspect ratio 3:4
+	// Cotton Cloud optimized cutout prompt v2.0
+	// Following Gemini best practices: narrative style, subject isolation, negative prompts
+	prompt := `You are a professional fashion photographer creating an e-commerce product image for a premium wardrobe app called "Cotton Cloud".
 
-Output only the clothing item on pure white background.`
+TASK: Transform this photo into a clean, professional clothing product shot.
+
+SUBJECT ISOLATION:
+- Identify the MAIN clothing item (the primary garment being showcased)
+- Remove ALL distractions: background environment, other people, hands, arms, hangers, mannequins, price tags, wrinkles, stains, dust, watermarks
+- If multiple items are visible, keep ONLY the single primary featured garment
+- Preserve the garment's natural shape and silhouette
+
+IMAGE QUALITY:
+- Recreate the garment with studio-quality lighting (soft, diffused, warm 4500K tone)
+- Preserve exact fabric colors, textures, material properties, and subtle details (buttons, stitching, patterns)
+- Show natural fabric drape and structure - the garment should look freshly pressed but not artificially flattened
+- Match professional fashion e-commerce standards (like ZARA, COS, or Everlane product pages)
+
+COMPOSITION:
+- Center the garment with balanced negative space on all sides
+- Pure white background (#FFFFFF) - completely solid, no gradients, no shadows cast on background
+- Aspect ratio 3:4 (portrait orientation)
+- The garment should fill approximately 70-80% of the frame
+
+OUTPUT: A single, pristine product photograph of ONLY the clothing item on pure white background.
+
+DO NOT include: people, body parts, faces, hangers, mannequins, price tags, brand labels, watermarks, multiple clothing items, furniture, room backgrounds, harsh shadows, reflections.`
 
 	// Sanitize MIME type
 	mimeType = strings.TrimPrefix(mimeType, "image/")
@@ -286,20 +302,30 @@ func (s *GeminiService) RefineCutout(ctx context.Context, originalImageBase64, c
 	// Sanitize MIME type
 	mimeType = strings.TrimPrefix(mimeType, "image/")
 
-	// Refinement prompt incorporating user feedback
-	prompt := fmt.Sprintf(`You previously generated a clothing cutout (second image) from the original photo (first image).
-The user has provided feedback to improve the result: "%s"
+	// Enhanced refinement prompt v2.0
+	prompt := fmt.Sprintf(`You are a professional fashion photographer refining an e-commerce product image.
 
-Please generate an improved cutout addressing the user's concerns while maintaining:
-- Pure white background (#FFFFFF)
-- Professional e-commerce product photography style
-- Preserved exact colors and textures
-- Centered composition with balanced layout
-- Aspect ratio 3:4
+CONTEXT:
+- First image: Original photo taken by user
+- Second image: Previous cutout attempt that needs improvement
+- User feedback: "%s"
 
-User feedback to address: %s
+TASK: Generate an IMPROVED cutout that addresses the user's concerns.
 
-Output only the improved clothing item on pure white background.`, userFeedback, userFeedback)
+IMPROVEMENTS NEEDED (based on user feedback):
+%s
+
+MAINTAIN THESE STANDARDS:
+- Pure white background (#FFFFFF) - completely solid, no shadows
+- Professional e-commerce product photography quality
+- Preserve exact fabric colors, textures, and material details
+- Natural garment shape and drape
+- Centered composition, aspect ratio 3:4
+- The garment should fill 70-80%% of the frame
+
+DO NOT include: people, body parts, hangers, mannequins, tags, watermarks, multiple items, backgrounds.
+
+OUTPUT: A single, improved product photograph addressing the user's feedback.`, userFeedback, userFeedback)
 
 	fmt.Printf("[AI] Refining cutout based on feedback: %s (MIME: %s)\n", userFeedback, mimeType)
 	resp, err := s.imageModel.GenerateContent(ctx,
