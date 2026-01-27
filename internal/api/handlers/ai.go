@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -64,13 +66,6 @@ type GenerateAvatarRequest struct {
 	FaceImageBase64 string `json:"faceImageBase64" binding:"required"`
 	MimeType        string `json:"mimeType" binding:"required"`
 	Gender          string `json:"gender" binding:"required"`
-	Height          string `json:"height" binding:"required"`
-	Weight          string `json:"weight" binding:"required"`
-	Bust            string `json:"bust"`
-	Waist           string `json:"waist"`
-	Hips            string `json:"hips"`
-	Thigh           string `json:"thigh"`
-	Calf            string `json:"calf"`
 	Features        string `json:"features"`
 }
 
@@ -258,11 +253,26 @@ func (h *AIHandler) ClearImageCache(c *gin.Context) {
 
 // GenerateAvatar generates a full-body avatar using Gemini AI
 func (h *AIHandler) GenerateAvatar(c *gin.Context) {
+	// Debug: print raw request body
+	rawBody, _ := io.ReadAll(c.Request.Body)
+	fmt.Printf("[HANDLER] GenerateAvatar raw body length: %d bytes\n", len(rawBody))
+	// Print first 1000 bytes to see JSON structure
+	if len(rawBody) > 1000 {
+		fmt.Printf("[HANDLER] GenerateAvatar raw body (first 1000): %s\n", string(rawBody[:1000]))
+	} else {
+		fmt.Printf("[HANDLER] GenerateAvatar raw body: %s\n", string(rawBody))
+	}
+	// Restore body for binding
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(rawBody))
+
 	var req GenerateAvatarRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		fmt.Printf("[HANDLER] GenerateAvatar bind error: %v\n", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	fmt.Printf("[HANDLER] GenerateAvatar gender: %s, features: %s, mimeType: %s, imageLen: %d\n",
+		req.Gender, req.Features, req.MimeType, len(req.FaceImageBase64))
 
 	if h.gemini == nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -275,21 +285,15 @@ func (h *AIHandler) GenerateAvatar(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 90*time.Second)
 	defer cancel()
 
-	// Convert request to AvatarMetrics
+	// Convert request to AvatarMetrics (simplified)
 	metrics := services.AvatarMetrics{
 		Gender:   req.Gender,
-		Height:   req.Height,
-		Weight:   req.Weight,
-		Bust:     req.Bust,
-		Waist:    req.Waist,
-		Hips:     req.Hips,
-		Thigh:    req.Thigh,
-		Calf:     req.Calf,
 		Features: req.Features,
 	}
 
 	imageBase64, err := h.gemini.GenerateAvatar(ctx, req.FaceImageBase64, req.MimeType, metrics)
 	if err != nil {
+		fmt.Printf("[HANDLER] GenerateAvatar error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

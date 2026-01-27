@@ -341,16 +341,9 @@ OUTPUT: A single, improved product photograph addressing the user's feedback.`, 
 	return extractImageFromResponse(resp)
 }
 
-// AvatarMetrics contains body measurement data
+// AvatarMetrics contains body characteristic data (simplified - Gemini is not sensitive to numerical metrics)
 type AvatarMetrics struct {
 	Gender   string `json:"gender"`
-	Height   string `json:"height"`
-	Weight   string `json:"weight"`
-	Bust     string `json:"bust"`
-	Waist    string `json:"waist"`
-	Hips     string `json:"hips"`
-	Thigh    string `json:"thigh"`
-	Calf     string `json:"calf"`
 	Features string `json:"features"`
 }
 
@@ -361,16 +354,17 @@ func (s *GeminiService) GenerateAvatar(ctx context.Context, faceImageBase64, mim
 		return "", err
 	}
 
-	// Digital Twin Engine v5.0 prompt from web app
-	prompt := fmt.Sprintf(`[IDENTITY & METRICS LOCK]:
-Generate a photorealistic full-body portrait of a %s subject based on the reference face in [Face_Image].
-Strictly construct body geometry according to: 
-Height: %scm, Weight: %skg, Bust: %scm, Waist: %scm, Hips: %scm.
-Special features: %s.
+	// Sanitize MIME type (genai.ImageData expects "jpeg" not "image/jpeg")
+	mimeType = strings.TrimPrefix(mimeType, "image/")
+
+	// Digital Twin Engine v6.0 - Simplified prompt using descriptive features
+	prompt := fmt.Sprintf(`[IDENTITY LOCK]:
+Generate a photorealistic full-body portrait of a %s subject based on the reference face.
+Body characteristics: %s.
 
 [VTO OPTIMIZATION - A-POSE]:
 Subject must be in a standardized "A-Pose": standing straight, facing camera, arms relaxed 15-20 degrees away from body (NOT touching hips), hands open.
-Attire: Wearing a minimalist, skin-tight, warm beige seamless bodysuit to reveal exact body contours.
+Attire: Wearing a minimalist, skin-tight, warm beige seamless bodysuit to reveal body contours.
 
 [LIGHTING & RENDER]:
 Cotton Cloud aesthetic, soft studio lighting, high-end editorial photography, warm 4000K tone. 
@@ -378,7 +372,7 @@ Solid Warm Off-White background (#FDFBF7).
 
 [NEGATIVE]:
 Loose clothing, baggy clothes, jacket, dress, shoes covering ankles, crossed arms, hair covering shoulders, complex background.`,
-		metrics.Gender, metrics.Height, metrics.Weight, metrics.Bust, metrics.Waist, metrics.Hips, metrics.Features)
+		metrics.Gender, metrics.Features)
 
 	resp, err := s.imageModel.GenerateContent(ctx,
 		genai.ImageData(mimeType, imageData),
@@ -505,15 +499,9 @@ func cleanJSONResponse(text string) string {
 	text = strings.TrimSpace(text)
 
 	// Remove markdown code blocks
-	if strings.HasPrefix(text, "```json") {
-		text = strings.TrimPrefix(text, "```json")
-	}
-	if strings.HasPrefix(text, "```") {
-		text = strings.TrimPrefix(text, "```")
-	}
-	if strings.HasSuffix(text, "```") {
-		text = strings.TrimSuffix(text, "```")
-	}
+	text = strings.TrimPrefix(text, "```json")
+	text = strings.TrimPrefix(text, "```")
+	text = strings.TrimSuffix(text, "```")
 
 	return strings.TrimSpace(text)
 }
